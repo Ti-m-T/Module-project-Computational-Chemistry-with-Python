@@ -1,1 +1,45 @@
+# Monte Carlo estimation of pi
 
+import numpy as np
+
+def estimate_pi(N): 
+
+    x = np.random.uniform(-1, 1, N)
+    y = np.random.uniform(-1, 1, N)
+
+    lenght = x**2 + y**2
+    inside_circle = np.sum(lenght <= 1)
+    pi_estimate = (inside_circle / N) * 4
+
+    return pi_estimate
+
+N = 100000000
+print(f"Estimated value of pi with {N} points: {estimate_pi(N)}")
+print(f"Actual error: {abs(estimate_pi(N) - np.pi):.6f}")
+
+# Chemistry-inspired Monte Carlo 
+
+def Reaction_probability_calculation(T, mass_of_1, mass_of_2 ,M , threshold_energy):
+
+    Above_threshold_count = 0
+
+    def Energy_of_a_particle(T, mass, k_B=1.380649e-23):
+    
+        std = np.sqrt(k_B * T / mass)
+    
+        X_vel = np.random.normal(0, std, M)
+        Y_vel = np.random.normal(0, std, M)
+        Z_vel = np.random.normal(0, std, M)
+    
+        energy = 0.5 * mass * (X_vel**2 + Y_vel**2 + Z_vel**2)
+        return energy
+
+    Collision_energy = Energy_of_a_particle(T,mass = mass_of_1) +  Energy_of_a_particle(T,mass = mass_of_2)
+
+    Above_threshold_count = np.sum(Collision_energy >= threshold_energy)
+
+    Reaction_probability = (Above_threshold_count * 100) / M
+
+    return Reaction_probability
+
+print(f"Reaction probability for the given conditions is {Reaction_probability_calculation(T=300, mass_of_1=1.67e-27, mass_of_2 = 1.67e-27, M=1000000, threshold_energy=1e-21)}%")
