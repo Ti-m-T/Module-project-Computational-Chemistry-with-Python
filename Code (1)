@@ -158,7 +158,7 @@ print("Elements:", elements)
 print("Balance matrix:")
 print(matrix)
 
-## B3. Finding the stoichiometric coefficients
+# B3. Finding the stoichiometric coefficients
 
 At this point I have a matrix describing the conservation of each element.
 
