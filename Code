@@ -1,6 +1,253 @@
+import re 
+import numpy as np 
+from scipy.linalg import null_space
+from fractions import Fraction
+from math import gcd
+from functools import reduce
+
+def parse_molecule(formula):
+    if not isinstance(formula, str) or not formula:
+        raise ValueError("The chemical formula must be a non-empty string.")
+
+    pattern = r'([A-Z][a-z]?)(\d*)'
+    matches = re.findall(pattern, formula)
+
+    reconstructed = "".join(element + number for element, number in matches)
+
+    if reconstructed != formula:
+        raise ValueError(f"Invalid chemical formula: {formula}")
+
+    atom_counts = {}
+
+    for element, number in matches:
+        count = int(number) if number else 1
+        atom_counts[element] = atom_counts.get(element, 0) + count
+
+    return atom_counts
+
+test_formulas = ["H2O", "CO2", "Fe2O3", "C3H8", "C2H5OH", "NH3"]
+
+for formula in test_formulas:
+    print(f"{formula}: {parse_molecule(formula)}")
+
+def create_balance_matrix(reactants, products):
+
+    if not isinstance(reactants, list) or not isinstance(products, list):
+        raise ValueError("Reactants and products must be lists.")
+
+    if len(reactants) == 0 or len(products) == 0:
+        raise ValueError("A reaction must contain at least one reactant and one product.")
+
+    formulas = reactants + products
+
+    parsed_molecules = [parse_molecule(formula) for formula in formulas]
+
+    elements = sorted({element for molecule in parsed_molecules for element in molecule})
+
+    matrix = np.zeros((len(elements), len(formulas)))
+
+    for row, element in enumerate(elements):
+
+        for column, moleculein enumerate(parsed_molecules):
+            atom_count = molecule.get(element, 0)
+
+            if column < len(reactants):
+                matrix[row, column] = atom_count
+            else:
+                matrix[row, column] = -atom_count
+
+    return matrix, elements
+
+reactants = ["H2", "O2"]
+products = ["H2O"]
+
+matrix, elements = create_balance_matrix(reactants, products)
+
+print("Elements:", elements)
+print("Balance matrix:")
+print(matrix)
+
+def integerize_coefficients(vector):
+
+    vector = np.asarray(vector, dtype=float)
+
+    vector[np.abs(vector) < 1e-12] = 0
+
+    if np.allclose(vector, 0):
+        raise ValueError("The input vector is a zero vector; cannot integerize.")
+
+    if np.all(vector < 0):
+        vector = -vector
+
+    if np.all(vector <= 0):
+        raise ValueError("A positive stoichiometric solution could not be found.")
+
+    fractions = [Fraction(float(value)).limit_denominator(10000) for value in vector]
+
+    def lcm(a, b):
+        return abs(a * b) // gcd(a, b)
+
+    common_denominator = reduce(lcm, [frac.denominator for frac in fractions])
+
+    integer_values = [fraction.numerator * (common_denominator // fraction.denominator) for fraction in fractions]
+
+    common_divisor = reduce(gcd, integer_values)
+
+    integer_values = [value // common_divisor for value in integer_values]
+
+    return integer_values
+
+def verify_atom_balance(reactants, products, coefficients):
+
+    number_of_reactants = len(reactants)
+
+    reactant_coefficients = coefficients[:number_of_reactants]
+    product_coefficients = coefficients[number_of_reactants:]
+
+    reactant_atoms = {}
+
+    for formula, coeff in zip(reactants, reactant_coefficients):
+
+        atoms = parse_molecule(formula)
+
+        for element, count in atoms.items():
+            reactant_atoms[element] = (reactant_atoms.get(element, 0) + count * coeff)
+
+    product_atoms = {}
+
+    for formula, coeff in zip(products, product_coefficients):
+
+        atoms = parse_molecule(formula)
+
+        for element, count in atoms.items():
+                product_atoms[element] = (product_atoms.get(element, 0) + count * coeff)
+
+    return reactant_atoms == product_atoms
+
+balance_reaction(reactants, products)
+
+def balance_reaction(reactants, products):
+
+    matrix, elements = create_balance_matrix(reactants, products)
+
+    solution_space = null_space(matrix)
+
+    if solution_space.size == 0:
+        raise ValueError("No solution exists for the given reaction.")
+
+    if solution_space.shape[1] > 1:
+        raise ValueError("Multiple independent solutions exist; cannot determine a unique stoichiometric solution.")
+
+    numerical_solution = solution_space[:, 0]
+
+    coefficients = integerize_coefficients(numerical_solution)
+
+    if not verify_atom_balance(reactants, products, coefficients):
+        raise ValueError("The computed coefficients do not balance the reaction.")
+
+    return coefficients
+
+reactants_1 = ["H2", "O2"]
+products_1 = ["H2O"]
+
+coefficients_1 = balance_reaction(reactants_1, products_1)
+
+print("Reaction 1 coefficients:", coefficients_1)
+
+reactants_2 = ["Fe", "O2"]
+products_2 = ["Fe2O3"]
+
+coefficients_2 = balance_reaction(
+    reactants_2,
+    products_2
+)
+
+print("Reaction 2 coefficients:", coefficients_2)
+
+reactants_3 = ["C3H8", "O2"]
+products_3 = ["CO2", "H2O"]
+
+coefficients_3 = balance_reaction(
+    reactants_3,
+    products_3
+)
+
+print("Reaction 3 coefficients:", coefficients_3)
+
+def get_molecular_mass(formula):
+
+    return calculate_molecular_mass(formula)
+
+def calculate_total_mass(molecules):
+
+    total_mass = 0.0
+
+    for formula, coeff in molecules:
+        mass = get_molecular_mass(formula)
+        total_mass += mass * coeff
+
+    return total_mass
+
+def check_mass_conservation(reactants, products, tolerance=1e-6):
+
+    reactant_mass = calculate_total_mass(reactants)
+    product_mass = calculate_total_mass(products)
+
+    return abs(reactant_mass - product_mass) <= tolerance
+
+def display_mass_check(reactants, products, tolerance=1e-6):
+
+    reactant_mass = calculate_total_mass(reactants)
+    product_mass = calculate_total_mass(products)
+
+    balanced = check_mass_conservation(reactants, products, tolerance)
+
+    print(f"Reactants total mass: {reactant_mass: .3f} u")
+    print(f"Products total mass: {product_mass: .3f} u")
+
+    if balanced:
+        print("Mass is conserved within the specified tolerance.")
+    else:
+        print("Mass is NOT conserved within the specified tolerance.")
+    
+    return balanced
+
+reactants_1_dict = dict(zip(reactants_1, coefficients_1[len(reactants_1):]))
+products_1_dict = dict(zip(products_1, coefficients_1[len(reactants_1):]))
+
+print("Reactants:", reactants_1_dict)
+print("Products:", products_1_dict)
+
+display_mass_check(reactants_1_dict, products_1_dict)
+
+reactants_2_dict = dict(zip(reactants_2, coefficients_2[len(reactants_2):]))
+products_2_dict = dict(zip(products_2, coefficients_2[len(reactants_2):]))
+
+display_mass_check(reactants_2_dict, products_2_dict)
+
+wrong_reactants = {"C3H8": 1, "O2": 4}
+
+wrong_products = {"CO2": 3, "H2O": 4}
+
+result = check_mass_conservation(wrong_reactants, wrong_products)
+
+print("Mass conservation result:", result)
+
+if result:
+    print("Mass is conserved.")
+else:
+    print("Mass is NOT conserved.")
+    
+assert check_mass_conservation({"H2": 2, "O2": 1}, {"H2O": 2}), "Mass is not conserved for the reaction 2H2 + O2 -> 2H2O"
+
+assert not check_mass_conservation({"C3H8": 1, "O2": 4}, {"CO2": 3, "H2O": 4}), "Mass is conserved for the reaction C3H8 + 4O2 -> 3CO2 + 4H2O"
+
+print ("All mass conservation tests passed.")
+
+
 # Monte Carlo estimation of pi
 
-import numpy as np
+
 
 def estimate_pi(N): 
 
